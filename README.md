@@ -1,5 +1,7 @@
 # torrent-verify
 
+A program to verify torrent files with their downloaded contents
+
 ### Installation
 
 1. Install PHP if you haven't already (http://php.net/)
