@@ -1,0 +1,6 @@
+{
+    "require": {
+        "docopt/docopt": "1.0.0-rc1",
+        "pure-bencode/pure-bencode": "1.1"
+    }
+}
