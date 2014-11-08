@@ -1,9 +1,9 @@
 #!/usr/bin/php
 <?php
 
-namespace PureBencode;
+namespace TorrentVerify;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/vendor/autoload.php';
 
 error_reporting(-1);
 ini_set('display_errors', 'On');
@@ -149,7 +149,7 @@ class Progress {
 
 class TorrentInfo {
     static function parse($torrent) {
-        $info = Bencode::decode(file_get_contents($torrent))['info'];
+        $info = \PureBencode\Bencode::decode(file_get_contents($torrent))['info'];
 
         if (isset($info['name']))
             $name = $info['name'];
