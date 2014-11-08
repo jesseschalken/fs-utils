@@ -4,25 +4,28 @@ namespace PureBencode;
 
 use Traversable;
 
+require_once __DIR__ . '/../vendor/autoload.php';
+
 error_reporting(-1);
 ini_set('display_errors', 'On');
 mb_internal_encoding('UTF-8');
 
 const DIR_SEP = DIRECTORY_SEPARATOR;
 
-require_once __DIR__ . '/../vendor/autoload.php';
+function fixPath($path) {
+    $invalids = str_split('<>:"|?*');
 
-function shorten($string) {
-    $string = json_encode($string, JSON_UNESCAPED_UNICODE);
-    $maxlen = 60;
-    if (mb_strlen($string) <= $maxlen)
-        return $string;
-    $part1 = mb_substr($string, 0, $maxlen / 2);
-    $part2 = mb_substr($string, -$maxlen / 2);
-    return "$part1...$part2";
+    foreach (range(0, 31) as $ord)
+        $invalids[] = chr($ord);
+    
+    return str_replace($invalids, '_', $path);
 }
 
-function readFiles(array $files, $length = 1024) {
+function dump($string) {
+    return json_encode($string, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+}
+
+function readFiles(array $files, $length = 1024000) {
     foreach ($files as $file) {
         $f = fopen($file, 'rb');
         while (!feof($f))
@@ -47,98 +50,78 @@ function chunk(Traversable $data, $length) {
 function formatBytes($bytes) {
     $f = array('', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y');
     $i = (int)floor(log(max(abs($bytes), 1), 1000));
-    return number_format($bytes / pow(1000, $i), 2) . $f[$i] . 'B';
+    return number_format($bytes / pow(1000, $i), 2) . " {$f[$i]}B";
 }
 
-class VerifyTorrentData {
-    static function run() {
-        global $argv;
+function printReplace($line = '') {
+    print "\r\x1B[2K$line";
+}
 
-        $self          = new self;
-        $self->dataDir = $argv[1];
-
-        foreach (array_slice($argv, 2) as $name) {
-            $self->out("reading " . shorten($name));
-            $torrent          = TorrentInfo::parse($name);
-            $self->torrents[] = $torrent;
-            $self->totalSize += $torrent->totalSize();
+function recursiveScan($dir) {
+    $result = array();
+    $files = array_diff(scandir($dir), array('.', '..'));
+    foreach ($files as $file) {
+        $path = $dir . DIR_SEP . $file;
+        if (is_dir($path) && !is_link($path)) {
+            foreach (recursiveScan($path) as $file2) {
+                $result[] = $file . DIR_SEP . $file2;
+            }
+        } else {
+            $result[] = $file;
         }
+    }
+    return $result;
+}
 
-        for ($self->i = 0; $self->i < count($self->torrents); $self->i++)
-            $self->doTorrent();
+class Progress {
+    private $total;
+    private $startTime;
+    private $done = 0;
+
+    function __construct($total) {
+        $this->total     = $total;
+        $this->startTime = microtime(true);
     }
 
-    /** @var string */
-    private $dataDir;
-    /** @var TorrentInfo[] */
-    private $torrents;
-    private $i;
-    private $totalSize = 0.0;
-    private $sizeDone = 0.0;
-
-    private function doTorrent() {
-        $info        = $this->torrents[$this->i];
-        $files       = array();
-        $oldSizeDone = $this->sizeDone;
-
-        $this->out("checking files");
-        foreach ($info->files as $file => $size) {
-            $path = $this->dataDir . DIR_SEP . $file;
-
-            if (!file_exists($path)) {
-                $this->out("file $path does not exist\n");
-            } else if (!is_readable($path)) {
-                $this->out("file $path is not readable\n");
-            } else if (!is_file($path)) {
-                $this->out("file $path is not a file\n");
-            } else {
-                $filesize = filesize($path);
-                if ($filesize != $size) {
-                    $this->out("$path file size mismatch. expected $size bytes, got $filesize bytes\n");
-                } else {
-                    $files[] = $path;
-                }
-            }
-        }
-
-        if (count($files) == count($info->files)) {
-            $count = count($info->pieces);
-            $this->out("verifying data");
-            foreach (chunk(readFiles($files), $info->pieceSize) as $i => $piece) {
-                $this->sizeDone += strlen($piece);
-                $hash     =& $info->pieces[$i];
-                $filehash = sha1($piece, true);
-
-                if (!$hash) {
-                    $this->out("piece $i onward is missing from torrent file\n");
-                    break;
-                } else if ($filehash !== $hash) {
-                    $this->out("piece $i/$count hash mismatch, expected " . bin2hex($hash) . ", got " . bin2hex($filehash) . "\n");
-                    break;
-                } else {
-                    $this->out("verifying data");
-                }
-            }
-        }
-
-        $this->sizeDone = $oldSizeDone + $info->totalSize();
+    function add($num) {
+        $this->done += $num;
     }
 
-    private function out($string = '') {
-        $percent      = number_format($this->sizeDone * 100 / max($this->totalSize, 1), 2) . '%';
-        $bytesDone    = formatBytes($this->sizeDone) . ' of ' . formatBytes($this->totalSize);
-        $torrentsDone = ($this->i + 1) . '/' . count($this->torrents);
+    function rate() {
+        $done = $this->done;
+        return !$done ? 0 : $done / (microtime(true) - $this->startTime);
+    }
 
-        print "\r\x1B[2K";
-        print "[$percent, $bytesDone, $torrentsDone]";
+    function eta() {
+        $rate = $this->rate();
+        return !$rate ? INF : ($this->total - $this->done) / $rate;
+    }
+   
+    function formatRate() {
+        return formatBytes($this->rate()) . '/s';
+    }
 
-        if ($this->i !== null) {
-            $info = $this->torrents[$this->i];
-            print " " . shorten($info->filename);
-        }
+    function formatETA() {
+        $t = $this->eta();
+        if ($t === INF)
+            return 'forever';
+        $t = (int) $t;
+        return sprintf('%02d:%02d:%02d',$t/3600,$t/60%60,$t%60);
+    }
 
-        if ($string)
-            print ": $string";
+    function percent() {
+        return $this->done / $this->total;
+    }
+
+    function formatPercent() {
+        return number_format($this->percent() * 100, 2) . '%';
+    }
+
+    function formatProgress() {
+        $percent = $this->formatPercent();
+        $eta     = $this->formatETA();
+        $rate    = $this->formatRate();
+        return "[$percent, $rate, ETA $eta]";
     }
 }
 
@@ -154,10 +137,10 @@ class TorrentInfo {
         $self = new self;
 
         if (isset($info['length'])) {
-            $self->files[$name] = $info['length'];
+            $self->files[fixPath($name)] = $info['length'];
         } else {
             foreach ($info['files'] as $file) {
-                $self->files[$name . DIR_SEP . join(DIR_SEP, $file['path'])] = $file['length'];
+                $self->files[fixPath($name . DIR_SEP . join(DIR_SEP, $file['path']))] = $file['length'];
             }
         }
 
@@ -169,21 +152,124 @@ class TorrentInfo {
     }
 
     /** @var string */
-    public $filename;
+    private $filename;
     /** @var int[] */
-    public $files = array();
+    private $files = array();
     /** @var string[] */
-    public $pieces = array();
+    private $pieces = array();
     /** @var int */
-    public $pieceSize = 0;
+    private $pieceSize = 0;
 
+    function fileNames() {
+        return array_keys($this->files);
+    }
+    
     function totalSize() {
         $size = 0.0;
         foreach ($this->files as $size1)
             $size += $size1;
         return $size;
     }
+
+    function checkFiles($dataDir) {
+        $okay = true;
+        foreach ($this->files as $file => $size) {
+            $path = $dataDir . DIR_SEP . $file;
+
+            if (!file_exists($path)) {
+                $this->out("file \"$path\" does not exist");
+                $okay = false;
+            } else if (!is_readable($path)) {
+                $this->out("file \"$path\" is not readable");
+                $okay = false;
+            } else if (!is_file($path)) {
+                $this->out("file \"$path\" is not a file");
+                $okay = false;
+            } else {
+                $filesize = filesize($path);
+                if ($filesize != $size) {
+                    $this->out("file \"$path\": expected $size bytes, got $filesize bytes");
+                    $okay = false;
+                }
+            }
+        }
+        return $okay;
+    }
+
+    private function out($line) {
+        printReplace("\"$this->filename\": $line\n");
+    }
+    
+    function checkFileContents($dataDir, Progress $progress) {
+        $files = array();
+        foreach ($this->files as $file => $size)
+            $files[] = $dataDir . DIR_SEP . $file;
+        
+        $t1 = microtime(true);
+        
+        $done = 0;
+        $okay = true;
+        foreach (chunk(readFiles($files), $this->pieceSize) as $i => $piece) {
+            $t2 = microtime(true);
+            if (($t2 - $t1) > (1/30) || $i == 0) {
+                printReplace("{$progress->formatProgress()}: $this->filename");
+                $t1 = $t2;
+            }
+            
+            $progress->add(strlen($piece));
+            $done += strlen($piece);
+            
+            $hash =& $this->pieces[$i];
+            $filehash = sha1($piece, true);
+
+            if (!$hash) {
+                $this->out("piece $i onward is missing");
+                $okay = false;
+                break;
+            } else if ($filehash !== $hash) {
+                $count = count($this->pieces);
+                $this->out("piece $i/$count hash mismatch, expected " . bin2hex($hash) . ", got " . bin2hex($filehash) . "");
+                $okay = false;
+                break;
+            }
+        }
+
+        $progress->add($this->totalSize() - $done);
+
+        return $okay;
+    }
 }
 
-VerifyTorrentData::run();
+$f = function () {
+    global $argv;
+
+    $dataDir = $argv[1];
+    $totalSize = 0.0;
+    $torrents = array();
+    $validFiles = array();
+    foreach (array_slice($argv, 2) as $name) {
+        $torrent = TorrentInfo::parse($name);
+        $torrents[] = $torrent;
+        $totalSize += $torrent->totalSize();
+        $validFiles = array_merge($validFiles, $torrent->fileNames());
+    }
+    print formatBytes($totalSize) . ", " . count($torrents) . ' torrents, ' . count($validFiles) . " files\n";
+    $allFiles = recursiveScan($dataDir);
+    $orphaned = array_diff($allFiles, $validFiles);
+    $missing  = array_diff($validFiles, $allFiles);
+    if ($orphaned)
+        print "orphaned files:\n  " . join("\n  ", $orphaned) . "\n";
+    if ($missing)
+        print "missing files:\n  " . join("\n  ", $missing) . "\n";
+    $progress = new Progress($totalSize);
+    foreach ($torrents as $torrent) {
+        $okay = $torrent->checkFiles($dataDir);
+        if (!$okay)
+            $progress->add($torrent->totalSize());
+        else
+            $torrent->checkFileContents($dataDir,$progress);
+    }
+};
+$f();
+
 
