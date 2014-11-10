@@ -16,7 +16,7 @@ function fixWindowsPath($path) {
 
     foreach (range(0, 31) as $ord)
         $invalids[] = chr($ord);
-    
+
     return str_replace($invalids, '_', $path);
 }
 
@@ -55,7 +55,7 @@ function formatBytes($bytes) {
 function printReplace($line = '') {
     static $cols;
     if ($cols === null)
-        $cols = (int) `tput cols`;
+        $cols = (int)`tput cols`;
     if ($cols && strpos($line, "\n") === false)
         $line = substr($line, 0, $cols);
     print "\r\x1B[2K$line";
@@ -63,7 +63,7 @@ function printReplace($line = '') {
 
 function recursiveScan($dir) {
     $result = array();
-    $files = array_diff(scandir($dir), array('.', '..'));
+    $files  = array_diff(scandir($dir), array('.', '..'));
     foreach ($files as $file) {
         $path = $dir . DIR_SEP . $file;
         if (is_dir($path) && !is_link($path)) {
@@ -81,7 +81,7 @@ function findTorrentFiles($path) {
     if (is_file($path) && pathinfo($path, PATHINFO_EXTENSION) === 'torrent') {
         yield $path;
     } else if (is_dir($path)) {
-        foreach (array_diff(scandir($path),array('.','..')) as $file) {
+        foreach (array_diff(scandir($path), array('.', '..')) as $file) {
             foreach (findTorrentFiles($path . DIR_SEP . $file) as $path2)
                 yield $path2;
         }
@@ -111,7 +111,7 @@ class Progress {
         $rate = $this->rate();
         return !$rate ? INF : ($this->total - $this->done) / $rate;
     }
-   
+
     function formatRate() {
         return formatBytes($this->rate()) . '/s';
     }
@@ -120,8 +120,8 @@ class Progress {
         $t = $this->eta();
         if ($t === INF)
             return 'forever';
-        $t = (int) $t;
-        return sprintf('%02d:%02d:%02d',$t/3600,$t/60%60,$t%60);
+        $t = (int)$t;
+        return sprintf('%02d:%02d:%02d', $t / 3600, $t / 60 % 60, $t % 60);
     }
 
     function percent() {
@@ -162,8 +162,8 @@ class TorrentInfo {
             $self->files[$name] = $info['length'];
         } else {
             foreach ($info['files'] as $file) {
-                $path = join(DIR_SEP, $file['path']);
-                $path = $name . DIR_SEP . $path;
+                $path               = join(DIR_SEP, $file['path']);
+                $path               = $name . DIR_SEP . $path;
                 $self->files[$path] = $file['length'];
             }
         }
@@ -190,11 +190,11 @@ class TorrentInfo {
             $files[fixWindowsPath($path)] = $size;
         $this->files = $files;
     }
-    
+
     function fileNames() {
         return array_keys($this->files);
     }
-    
+
     function totalSize() {
         $size = 0.0;
         foreach ($this->files as $size1)
@@ -230,27 +230,27 @@ class TorrentInfo {
     private function out($line) {
         printReplace("\"$this->filename\": $line\n");
     }
-    
+
     function checkFileContents($dataDir, Progress $progress) {
         $files = array();
         foreach ($this->files as $file => $size)
             $files[] = $dataDir . DIR_SEP . $file;
-        
+
         $t1 = microtime(true);
-        
+
         $done = 0;
         $okay = true;
         foreach (chunk(readFiles($files), $this->pieceSize) as $i => $piece) {
             $t2 = microtime(true);
-            if (($t2 - $t1) > (1/30) || $i == 0) {
-                $progress->printProgress( $this->filename );
+            if (($t2 - $t1) > (1 / 30) || $i == 0) {
+                $progress->printProgress($this->filename);
                 $t1 = $t2;
             }
-            
+
             $progress->add(strlen($piece));
             $done += strlen($piece);
-            
-            $hash =& $this->pieces[$i];
+
+            $hash     =& $this->pieces[$i];
             $filehash = sha1($piece, true);
 
             if (!$hash) {
@@ -273,7 +273,7 @@ class TorrentInfo {
 
 function main() {
     $docopt = new \Docopt\Handler;
-    $args = $docopt->handle( <<<'s'
+    $args   = $docopt->handle(<<<'s'
 torrent-verify
 
 Usage:
@@ -289,12 +289,13 @@ Options:
 s
     );
 
-    $dataDir = $args['--data-dir'];
-    $allFiles = recursiveScan($dataDir);
-    $totalSize = 0.0;
-    $torrents = array();
+    /** @var TorrentInfo[] $torrents */
+    $dataDir    = $args['--data-dir'];
+    $allFiles   = recursiveScan($dataDir);
+    $totalSize  = 0.0;
+    $torrents   = array();
     $validFiles = array();
-    $isWindows = $args['--windows'];
+    $isWindows  = $args['--windows'];
     foreach ($args['<torrent>'] as $name) {
         foreach (is_dir($name) ? findTorrentFiles($name) : array($name) as $name2) {
             $torrent = TorrentInfo::parse($name2);
@@ -305,39 +306,39 @@ s
             $validFiles = array_merge($validFiles, $torrent->fileNames());
         }
     }
-    
+
     if ($args['list-files']) {
         foreach ($validFiles as $file)
             print "$file\n";
     }
-    
+
     if ($args['verify-data']) {
         $formatTotalSize = formatBytes($totalSize);
-        $numTorrents = count($torrents);
-        $numFiles = count($validFiles);
+        $numTorrents     = count($torrents);
+        $numFiles        = count($validFiles);
         print "$formatTotalSize, $numTorrents torrents, $numFiles files\n";
         print "\n";
-    
+
         $progress = new Progress($totalSize);
         foreach ($torrents as $torrent) {
             $okay = $torrent->checkFiles($dataDir);
             if (!$okay)
                 $progress->add($torrent->totalSize());
             else
-                $torrent->checkFileContents($dataDir,$progress);
+                $torrent->checkFileContents($dataDir, $progress);
         }
         $progress->printProgress();
         print "\n";
         print "done\n";
     }
-    
+
     if ($args['missing-files']) {
-        $missing = array_diff($validFiles, $allFiles) ?: array('none');
+        $missing = array_diff($validFiles, $allFiles) ? : array('none');
         print "missing files:\n  " . join("\n  ", $missing) . "\n";
     }
-    
+
     if ($args['orphaned-files']) {
-        $orphaned = array_diff($allFiles, $validFiles) ?: array('none');
+        $orphaned = array_diff($allFiles, $validFiles) ? : array('none');
         print "orphaned files:\n  " . join("\n  ", $orphaned) . "\n";
     }
 }
