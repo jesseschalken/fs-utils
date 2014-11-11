@@ -94,22 +94,30 @@ const DIR_SEP = DIRECTORY_SEPARATOR;
 
 /**
  * @param string $path
+ * @param int[]  $sizes
  * @return int
  */
-function getSize($path) {
+function getSize($path, array &$sizes) {
     printReplace("calculating size: $path");
     $size = 0;
     if (is_dir($path) && !is_link($path)) {
         $scan = scandir($path);
         $scan = array_diff($scan, array('.', '..'));
         foreach ($scan as $s)
-            $size += getSize($path . DIR_SEP . $s);
+            $size += getSize($path . DIR_SEP . $s, $sizes);
     } else if (is_file($path)) {
         $size += filesize($path);
     }
+    $sizes[$path] = $size;
     return $size;
 }
 
+/**
+ * @param string         $path
+ * @param (string[])[]    $hashes
+ * @param Progress $p
+ * @return null|string
+ */
 function getHash($path, array &$hashes, Progress $p) {
     $h = hash_init('sha1');
 
@@ -144,34 +152,41 @@ $f = function () {
 find-duplicate-files
 
 Usage:
-  find-duplicate-files <path>...
+  find-duplicate-files [--limit=LIMIT] <path>...
 s
     );
 
-    $paths = $args['<path>'];
-
-    $size = 0;
+    $paths     = $args['<path>'];
+    $limit     = $args['--limit'];
+    $sizes     = array();
+    $totalSize = 0;
     foreach ($paths as $p)
-        $size += getSize($p);
+        $totalSize += getSize($p, $sizes);
     printReplace();
 
-    $progress = new Progress($size);
+    $progress = new Progress($totalSize);
     $hashes   = array();
     foreach ($paths as $p)
         getHash($p, $hashes, $progress);
     printReplace();
 
-    $counts = array();
+    $hashSizes = array();
     foreach ($hashes as $hash => $paths2) {
-        $count = count($paths2);
-        if ($count > 1)
-            $counts[$hash] = $count;
+        if (count($paths2) == 1)
+            continue;
+        $hashSizes[$hash] = 0;
+        foreach ($paths2 as $path)
+            $hashSizes[$hash] += $sizes[$path];
     }
-    asort($counts, SORT_NUMERIC);
-    $counts = array_reverse($counts, true);
+    arsort($hashSizes, SORT_NUMERIC);
 
-    foreach ($counts as $hash => $count) {
-        print bin2hex($hash) . " ($count copies)\n";
+    if ($limit !== null)
+        $hashSizes = array_slice($hashSizes, 0, (int)$limit);
+
+    foreach ($hashSizes as $hash => $size) {
+        $count = count($hashes[$hash]);
+        $size  = formatBytes($size);
+        print bin2hex($hash) . " ($count copies, $size)\n";
         foreach ($hashes[$hash] as $path)
             print "  $path\n";
         print "\n";
