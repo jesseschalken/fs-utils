@@ -17,7 +17,7 @@ function readFile($path) {
 }
 
 function formatBytes($bytes) {
-    $f = array('', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y');
+    $f = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
     $i = (int)floor(log(max(abs($bytes), 1), 1000));
     return number_format($bytes / pow(1000, $i), 2) . " {$f[$i]}B";
 }
@@ -88,6 +88,54 @@ class Progress {
             $line .= ": $note";
         printReplace($line);
     }
+
+    function thread(\Traversable $bytes, $path) {
+        $this->printProgress($path);
+        foreach ($bytes as $data) {
+            $this->add(strlen($data));
+            $this->printProgress($path);
+            yield $data;
+        }
+        $this->printProgress($path);
+    }
+}
+
+class Hashes {
+    /** @var AbstractFile[][] */
+    private $hashes = [];
+
+    function add(AbstractFile $file, Progress $progress) {
+        $hash = hash($file->contents($progress, $this));
+        $hash = "({$file->type()}) $hash";
+
+        $this->hashes[$hash][] = $file;
+        return $hash;
+    }
+
+    /**
+     * @param string $hash
+     * @return AbstractFile[]
+     */
+    function files($hash) {
+        return $this->hashes[$hash];
+    }
+
+    function sorted() {
+        $sizes = [];
+        foreach ($this->hashes as $hash => $files)
+            $sizes[$hash] = $this->amountDuplicated($hash);
+        arsort($sizes, SORT_NUMERIC);
+        return array_keys($sizes);
+    }
+
+    function amountDuplicated($hash) {
+        $size  = 0;
+        $files = $this->files($hash);
+        foreach ($files as $file)
+            $size += $file->size();
+        $size -= $size / count($files);
+        return $size;
+    }
 }
 
 const DIR_SEP = DIRECTORY_SEPARATOR;
@@ -102,7 +150,7 @@ function getSize($path, array &$sizes) {
     $size = 0;
     if (is_dir($path) && !is_link($path)) {
         $scan = scandir($path);
-        $scan = array_diff($scan, array('.', '..'));
+        $scan = array_diff($scan, ['.', '..']);
         foreach ($scan as $s)
             $size += getSize($path . DIR_SEP . $s, $sizes);
     } else if (is_file($path)) {
@@ -113,7 +161,7 @@ function getSize($path, array &$sizes) {
 }
 
 /**
- * @param string         $path
+ * @param string   $path
  * @param (string[])[]    $hashes
  * @param Progress $p
  * @return null|string
@@ -124,7 +172,7 @@ function getHash($path, array &$hashes, Progress $p) {
     if (is_dir($path) && !is_link($path)) {
         hash_update($h, "dir\n");
         $scan = scandir($path);
-        $scan = array_diff($scan, array('.', '..'));
+        $scan = array_diff($scan, ['.', '..']);
         foreach ($scan as $s) {
             $hash2 = getHash($path . DIR_SEP . $s, $hashes, $p) ? : str_repeat("\x00", 20);
             hash_update($h, "$hash2 $s\n");
@@ -156,39 +204,45 @@ Usage:
 s
     );
 
-    $paths     = $args['<path>'];
-    $limit     = $args['--limit'];
-    $sizes     = array();
-    $totalSize = 0;
-    foreach ($paths as $p)
-        $totalSize += getSize($p, $sizes);
-    printReplace();
+    $paths = $args['<path>'];
+    $limit = $args['--limit'];
 
-    $progress = new Progress($totalSize);
-    $hashes   = array();
-    foreach ($paths as $p)
-        getHash($p, $hashes, $progress);
-    printReplace();
-
-    $hashSizes = array();
-    foreach ($hashes as $hash => $paths2) {
-        if (count($paths2) == 1)
-            continue;
-        $hashSizes[$hash] = 0;
-        foreach ($paths2 as $path)
-            $hashSizes[$hash] += $sizes[$path];
+    /** @var AbstractFile[] $files */
+    $files = [];
+    $size  = 0;
+    $count = 0;
+    foreach ($paths as $path) {
+        $file = AbstractFile::create($path, null, function ($path) {
+            printReplace("scanning $path...");
+        });
+        $count += $file->count();
+        $size += $file->size();
+        $files[] = $file;
     }
-    arsort($hashSizes, SORT_NUMERIC);
+    printReplace();
 
+    print "$count files, " . formatBytes($size) . "\n";
+
+    $progress = new Progress($size);
+    $hashes   = new Hashes;
+    foreach ($files as $file)
+        $hashes->add($file, $progress);
+
+    $sorted = $hashes->sorted();
     if ($limit !== null)
-        $hashSizes = array_slice($hashSizes, 0, (int)$limit);
+        $sorted = array_slice($sorted, 0, (int)$limit);
+    foreach ($sorted as $hash) {
+        $files2 = $hashes->files($hash);
+        $count2 = count($files2);
 
-    foreach ($hashSizes as $hash => $size) {
-        $count = count($hashes[$hash]);
-        $size  = formatBytes($size);
-        print bin2hex($hash) . " ($count copies, $size)\n";
-        foreach ($hashes[$hash] as $path)
-            print "  $path\n";
+        $duplicated = $hashes->amountDuplicated($hash);
+        if (!$duplicated)
+            continue;
+        $duplicated = formatBytes($duplicated);
+
+        print "$hash ($count2 copies, $duplicated duplicated)\n";
+        foreach ($files2 as $file)
+            print "  {$file->describe()}\n";
         print "\n";
     }
 };
