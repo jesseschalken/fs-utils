@@ -15,7 +15,7 @@ function hash($s) {
 
 function read_file($path) {
     $f = fopen($path, 'rb');
-    while (!feof($f))
+    while ($f && !feof($f))
         yield fread($f, 10000000);
     fclose($f);
 }
@@ -84,6 +84,12 @@ abstract class AbstractFile {
     function describe() { return "({$this->type()}) {$this->fullPath()}"; }
 
     abstract function type();
+
+    function delete() {
+        $cmd = "rm -rf " . escapeshellarg($this->fullPath());
+        printReplace("$cmd\n");
+        shell_exec($cmd);
+    }
 }
 
 class Directory extends AbstractFile {

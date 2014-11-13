@@ -106,7 +106,7 @@ class Hashes {
 
     function add(AbstractFile $file, Progress $progress) {
         $hash = hash($file->contents($progress, $this));
-        $hash = "({$file->type()}) $hash";
+        $hash = "[{$file->type()}] $hash";
 
         $this->hashes[$hash][] = $file;
         return $hash;
@@ -194,7 +194,62 @@ function getHash($path, array &$hashes, Progress $p) {
     return $hash;
 }
 
-$f = function () {
+function runReport(Hashes $hashes, $limit = null) {
+    $sorted = $hashes->sorted();
+    if ($limit !== null)
+        $sorted = array_slice($sorted, 0, (int)$limit);
+
+    foreach ($sorted as $hash) {
+        $files = $hashes->files($hash);
+        $count = count($files);
+
+        $duplicated = $hashes->amountDuplicated($hash);
+        if (!$duplicated)
+            continue;
+        $duplicated = formatBytes($duplicated);
+
+        print "$hash ($count copies, $duplicated duplicated)\n";
+
+        $options = [];
+        foreach ($files as $k => $file)
+            $options[$k + 1] = "Keep only \"{$file->fullPath()}\"";
+        $options['s'] = 'Skip this duplicate';
+        $options['q'] = 'Quit';
+
+        $choice = readOption($options);
+
+        if ($choice === 's') {
+            print "skipped\n";
+            continue;
+        } else if ($choice === 'q') {
+            print "quit\n";
+            return;
+        } else if (is_numeric($choice) && isset($files[$choice - 1])) {
+            foreach ($files as $k => $file)
+                if ($k !== ($choice - 1))
+                    $file->delete();
+        } else {
+            throw new \Exception;
+        }
+    }
+    print "done\n";
+}
+
+function readOption(array $options) {
+    while (true) {
+        print "Please select an option:\n";
+        foreach ($options as $k => $v)
+            print "  $k: $v\n";
+        print "> ";
+        $line = fgets(STDIN);
+        $line = substr($line, 0, -1);
+        if (isset($options[$line]))
+            return $line;
+    }
+    throw new \Exception;
+}
+
+function main() {
     ini_set('memory_limit', '-1');
     $args = \Docopt::handle(<<<s
 find-duplicate-files
@@ -228,22 +283,8 @@ s
     foreach ($files as $file)
         $hashes->add($file, $progress);
 
-    $sorted = $hashes->sorted();
-    if ($limit !== null)
-        $sorted = array_slice($sorted, 0, (int)$limit);
-    foreach ($sorted as $hash) {
-        $files2 = $hashes->files($hash);
-        $count2 = count($files2);
+    printReplace();
+    runReport($hashes, $limit);
+}
 
-        $duplicated = $hashes->amountDuplicated($hash);
-        if (!$duplicated)
-            continue;
-        $duplicated = formatBytes($duplicated);
-
-        print "$hash ($count2 copies, $duplicated duplicated)\n";
-        foreach ($files2 as $file)
-            print "  {$file->describe()}\n";
-        print "\n";
-    }
-};
-$f();
+main();
