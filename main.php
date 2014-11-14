@@ -116,7 +116,7 @@ class Hashes {
     function sorted() {
         $sizes = [];
         foreach ($this->hashes as $hash => $files)
-            if (count($files) > 0)
+            if (count($files) > 1)
                 $sizes[$hash] = $this->amountDuplicated($hash);
         arsort($sizes, SORT_NUMERIC);
         return array_keys($sizes);
@@ -137,28 +137,32 @@ function runReport(Hashes $hashes, $limit = null) {
     if ($limit !== null)
         $sorted = array_slice($sorted, 0, (int)$limit);
 
-    foreach ($sorted as $hash) {
+    $i = 0;
+    while (isset($sorted[$i])) {
+        $num   = count($sorted);
+        $hash  = $sorted[$i];
         $files = $hashes->files($hash);
         $count = count($files);
-
+        $index = ($i+1) . "/$num";
+            
         $duplicated = $hashes->amountDuplicated($hash);
-        if (!$duplicated)
-            continue;
         $duplicated = formatBytes($duplicated);
 
-        print "$hash ($count copies, $duplicated duplicated)\n";
+        print "$index: $hash ($count copies, $duplicated duplicated)\n";
 
         $options = [];
         foreach ($files as $k => $file)
             $options[$k + 1] = "Keep only \"{$file->path()}\"";
-        $options['s'] = 'Skip this duplicate';
+        $options['n'] = 'Next duplicate (skip)';
+        $options['p'] = 'Previous duplicate';
         $options['q'] = 'Quit';
 
         $choice = readOption($options);
 
-        if ($choice === 's') {
-            print "skipped\n";
-            continue;
+        if ($choice === 'n') {
+            $i = ($i + $num + 1) % $num;
+        } else if ($choice === 'p') {
+            $i = ($i + $num - 1) % $num;
         } else if ($choice === 'q') {
             print "quit\n";
             return;
@@ -166,6 +170,8 @@ function runReport(Hashes $hashes, $limit = null) {
             foreach ($files as $k => $file)
                 if ($k !== ($choice - 1))
                     $file->delete();
+            unset($sorted[$i]);
+            $sorted = array_values($sorted);
         } else {
             throw new \Exception;
         }
