@@ -90,7 +90,6 @@ class Progress {
             $this->printProgress($path);
             yield $data;
         }
-        $this->printProgress($path);
     }
 }
 
