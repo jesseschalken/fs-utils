@@ -100,7 +100,7 @@ class Hashes {
 
     function add(File $file, Progress $progress) {
         $hash = hash($file->contents($progress, $this));
-        $hash = "[{$file->type()}] $hash";
+        $hash = "{$file->type()} $hash";
 
         $this->hashes[$hash][] = $file;
         $this->sizes[$hash]    = $file->size();
@@ -168,7 +168,7 @@ function runReport(Hashes $hashes, $limit = null) {
         $duplicated = $hashes->amountDuplicated($hash);
         $duplicated = formatBytes($duplicated);
 
-        print "$index: $hash ($count copies, $duplicated duplicated)\n";
+        print "$index: [$hash] ($count copies, $duplicated duplicated)\n";
 
         $options = [];
         foreach ($files as $k => $file)
