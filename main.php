@@ -220,10 +220,9 @@ function readOption(array $options) {
 function main() {
     ini_set('memory_limit', '-1');
     $args = \Docopt::handle(<<<s
-find-duplicate-files
-
 Usage:
   find-duplicate-files [--limit=LIMIT] <path>...
+  find-duplicate-files --help|-h
 s
     );
 
