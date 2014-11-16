@@ -55,8 +55,10 @@ class File {
         }
     }
 
-    function size(\Closure $f) {
-        $f($this->path);
+    function size(\Closure $f = null) {
+        if ($f)
+            $f($this->path);
+        
         switch ($this->type()) {
             case self::FILE:
                 return filesize($this->path);
@@ -98,6 +100,10 @@ class File {
         shell_exec($cmd);
     }
 
+    function exists() {
+        return file_exists($this->path);
+    }
+    
     function join($file) {
         return new self($this->path . DIRECTORY_SEPARATOR . $file);
     }

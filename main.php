@@ -96,12 +96,14 @@ class Progress {
 class Hashes {
     /** @var File[][] */
     private $hashes = [];
+    private $sizes = [];
 
     function add(File $file, Progress $progress) {
         $hash = hash($file->contents($progress, $this));
         $hash = "[{$file->type()}] $hash";
 
         $this->hashes[$hash][] = $file;
+        $this->sizes[$hash]    = $file->size();
         return $hash;
     }
 
@@ -122,13 +124,25 @@ class Hashes {
         return array_keys($sizes);
     }
 
+    function totalSize($hash) {
+        return $this->sizes[$hash] * count($this->hashes[$hash]);
+    }
+
+    function verify($hash) {
+        $size = $this->sizes[$hash];
+        $files =& $this->hashes[$hash];
+        foreach ($files as $k => $file) {
+            if (!$file->exists() || $file->size() != $size)
+                unset($files[$k]);
+        }
+        $files = array_values($files);
+    }
+
     function amountDuplicated($hash) {
-        $size  = 0;
-        $files = $this->files($hash);
-        foreach ($files as $file)
-            $size += $file->size(function () { });
-        $size -= $size / count($files);
-        return $size;
+        $dupes = count($this->hashes[$hash]) - 1;
+        $size  = $this->sizes[$hash];
+
+        return $dupes * $size;
     }
 }
 
@@ -141,10 +155,16 @@ function runReport(Hashes $hashes, $limit = null) {
     while (isset($sorted[$i])) {
         $num   = count($sorted);
         $hash  = $sorted[$i];
+        $hashes->verify($hash);
         $files = $hashes->files($hash);
         $count = count($files);
         $index = ($i+1) . "/$num";
-            
+
+        if ($count <= 1) {
+            $sorted = array_splice($sorted, $i, 1);
+            continue;
+        }
+
         $duplicated = $hashes->amountDuplicated($hash);
         $duplicated = formatBytes($duplicated);
 
@@ -153,7 +173,8 @@ function runReport(Hashes $hashes, $limit = null) {
         $options = [];
         foreach ($files as $k => $file)
             $options[$k + 1] = "Keep only \"{$file->path()}\"";
-        $options['n'] = 'Next duplicate (skip)';
+        $options['D'] = 'Delete ALL';
+        $options['n'] = 'Next duplicate';
         $options['p'] = 'Previous duplicate';
         $options['q'] = 'Quit';
 
@@ -166,12 +187,15 @@ function runReport(Hashes $hashes, $limit = null) {
         } else if ($choice === 'q') {
             print "quit\n";
             return;
+        } else if ($choice === 'D') {
+            foreach ($files as $file)
+                $file->delete();
+            $sorted = array_splice($sorted, $i, 1);
         } else if (is_numeric($choice) && isset($files[$choice - 1])) {
             foreach ($files as $k => $file)
                 if ($k !== ($choice - 1))
                     $file->delete();
-            unset($sorted[$i]);
-            $sorted = array_values($sorted);
+            $sorted = array_splice($sorted, $i, 1);
         } else {
             throw new \Exception;
         }
