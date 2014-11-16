@@ -161,7 +161,7 @@ function runReport(Hashes $hashes, $limit = null) {
         $index = ($i+1) . "/$num";
 
         if ($count <= 1) {
-            $sorted = array_splice($sorted, $i, 1);
+            array_splice($sorted, $i, 1);
             continue;
         }
 
@@ -190,12 +190,12 @@ function runReport(Hashes $hashes, $limit = null) {
         } else if ($choice === 'D') {
             foreach ($files as $file)
                 $file->delete();
-            $sorted = array_splice($sorted, $i, 1);
+            array_splice($sorted, $i, 1);
         } else if (is_numeric($choice) && isset($files[$choice - 1])) {
             foreach ($files as $k => $file)
                 if ($k !== ($choice - 1))
                     $file->delete();
-            $sorted = array_splice($sorted, $i, 1);
+            array_splice($sorted, $i, 1);
         } else {
             throw new \Exception;
         }
