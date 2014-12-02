@@ -79,15 +79,14 @@ class Progress {
     }
 
     /**
-     * @param \Traversable $bytes
-     * @param string       $path
+     * @param File $file
      * @return \Generator
      */
-    function thread(\Traversable $bytes, $path) {
-        $this->printProgress($path);
-        foreach ($bytes as $data) {
+    function readFile(File $file) {
+        $this->printProgress($file->path());
+        foreach ($file->readFile() as $data) {
             $this->add(strlen($data));
-            $this->printProgress($path);
+            $this->printProgress($file->path());
             yield $data;
         }
     }
@@ -98,13 +97,15 @@ class Hashes {
     private $hashes = [];
     private $sizes = [];
 
-    function add(File $file, Progress $progress) {
-        $hash = hash($file->contents($progress, $this));
-        $hash = "{$file->type()} $hash";
+    function hashReader(\Closure $readFile = null) {
+        $readHash = function (File $file) use ($readFile, &$readHash) {
+            $hash = $file->readHash($readFile, $readHash);
 
-        $this->hashes[$hash][] = $file;
-        $this->sizes[$hash]    = $file->size();
-        return $hash;
+            $this->hashes[$hash][] = $file;
+            $this->sizes[$hash]    = $file->size();
+            return $hash;
+        };
+        return $readHash;
     }
 
     /**
@@ -221,35 +222,50 @@ function main() {
     ini_set('memory_limit', '-1');
     $args = \Docopt::handle(<<<s
 Usage:
-  find-duplicate-files [--limit=LIMIT] <path>...
+  find-duplicate-files cleanup [--limit=LIMIT] <path>...
+  find-duplicate-files read <path>...
   find-duplicate-files --help|-h
 s
     );
 
-    $paths = $args['<path>'];
-    $limit = $args['--limit'];
+    if ($args['cleanup']) {
+        $paths = $args['<path>'];
+        $limit = $args['--limit'];
 
-    /** @var File[] $files */
-    $files = [];
-    $size  = 0;
-    foreach ($paths as $path) {
-        $file = new File($path);
-        $size += $file->size(function ($path) {
-            printReplace("scanning $path");
+        /** @var File[] $files */
+        $files = [];
+        $size  = 0;
+        foreach ($paths as $path) {
+            $file = new File($path);
+            $size += $file->size(function ($path) {
+                printReplace("scanning $path");
+            });
+            $files[] = $file;
+        }
+        printReplace();
+
+        print "found " . formatBytes($size) . "\n";
+
+        $progress = new Progress($size);
+        $hashes   = new Hashes;
+        $readHash = $hashes->hashReader(function (File $file) use ($progress) {
+            return $progress->readFile($file);
         });
-        $files[] = $file;
+
+        foreach ($files as $file)
+            $readHash($file);
+
+        printReplace();
+        runReport($hashes, $limit);
     }
-    printReplace();
 
-    print "found " . formatBytes($size) . "\n";
-
-    $progress = new Progress($size);
-    $hashes   = new Hashes;
-    foreach ($files as $file)
-        $hashes->add($file, $progress);
-
-    printReplace();
-    runReport($hashes, $limit);
+    if ($args['read']) {
+        foreach ($args['<path>'] as $path) {
+            $file = new File($path);
+            foreach ($file->readContents() as $s)
+                print $s;
+        }
+    }
 }
 
 main();

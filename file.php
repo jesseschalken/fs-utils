@@ -33,28 +33,42 @@ class File {
     function path() { return $this->path; }
 
     /**
-     * @param Progress $progress
-     * @param Hashes   $hashes
+     * @param \Closure $readFile
+     * @param \Closure $readHash
      * @return \Generator
      */
-    function contents(Progress $progress, Hashes $hashes) {
+    function readContents(\Closure $readFile = null, \Closure $readHash = null) {
         switch ($this->type()) {
             case self::DIR:
                 /** @var File $child */
                 foreach ($this->scanDir() as $name) {
-                    $hash = $hashes->add($this->join($name), $progress);
-                    yield "$hash $name\n";
+                    $file = $this->join($name);
+                    $hash = $readHash ? $readHash($file) : $file->readHash($readFile, $readHash);
+                    yield "$hash  $name\n";
                 }
                 break;
             case self::LINK:
                 yield readlink($this->path);
                 break;
             case self::FILE:
-                foreach ($progress->thread($this->readFile(), $this->path) as $s)
+                $contents = $readFile ? $readFile($this) : $this->readFile();
+                foreach ($contents as $s)
                     yield $s;
+                break;
         }
     }
 
+    /**
+     * @param \Closure $readFile
+     * @param \Closure $readHash
+     * @return string
+     */
+    function readHash(\Closure $readFile = null, \Closure $readHash = null) {
+        $hash = hash($this->readContents($readFile, $readHash));
+        $type = str_pad($this->type(), 6);
+        return "$hash  $type";
+    }
+    
     function size(\Closure $f = null) {
         if ($f)
             $f($this->path);
