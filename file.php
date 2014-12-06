@@ -44,7 +44,8 @@ class File {
                 foreach ($this->scanDir() as $name) {
                     $file = $this->join($name);
                     $hash = $readHash ? $readHash($file) : $file->readHash($readFile, $readHash);
-                    yield "$hash  $name\n";
+                    $hash = str_pad($hash, 48);
+                    yield "$hash $name\n";
                 }
                 break;
             case self::LINK:
@@ -65,8 +66,8 @@ class File {
      */
     function readHash(\Closure $readFile = null, \Closure $readHash = null) {
         $hash = hash($this->readContents($readFile, $readHash));
-        $type = str_pad($this->type(), 6);
-        return "$hash  $type";
+        $type = $this->type();
+        return "$hash $type";
     }
     
     function size(\Closure $f = null) {
