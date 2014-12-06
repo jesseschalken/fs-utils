@@ -147,10 +147,8 @@ class Hashes {
     }
 }
 
-function runReport(Hashes $hashes, $limit = null) {
+function runReport(Hashes $hashes) {
     $sorted = $hashes->sorted();
-    if ($limit !== null)
-        $sorted = array_slice($sorted, 0, (int)$limit);
 
     $i = 0;
     while (isset($sorted[$i])) {
@@ -222,7 +220,7 @@ function main() {
     ini_set('memory_limit', '-1');
     $args = \Docopt::handle(<<<s
 Usage:
-  find-duplicate-files cleanup [--limit=LIMIT] <path>...
+  find-duplicate-files cleanup <path>...
   find-duplicate-files read <path>...
   find-duplicate-files --help|-h
 s
@@ -230,7 +228,6 @@ s
 
     if ($args['cleanup']) {
         $paths = $args['<path>'];
-        $limit = $args['--limit'];
 
         /** @var File[] $files */
         $files = [];
@@ -256,7 +253,7 @@ s
             $readHash($file);
 
         printReplace();
-        runReport($hashes, $limit);
+        runReport($hashes);
     }
 
     if ($args['read']) {
