@@ -84,7 +84,7 @@ class Progress {
      */
     function readFile(File $file) {
         $this->printProgress($file->path());
-        foreach ($file->readFile() as $data) {
+        foreach ($file->read() as $data) {
             $this->add(strlen($data));
             $this->printProgress($file->path());
             yield $data;
@@ -93,24 +93,21 @@ class Progress {
 }
 
 class Hashes {
-    /** @var File[][] */
+    /** @var AbstractFile[][] */
     private $hashes = [];
-    private $sizes = [];
+    private $data;
 
-    function hashReader(\Closure $readFile = null) {
-        $readHash = function (File $file) use ($readFile, &$readHash) {
-            $hash = $file->readHash($readFile, $readHash);
+    function __construct(FileData $data) {
+        $this->data = $data;
+    }
 
-            $this->hashes[$hash][] = $file;
-            $this->sizes[$hash]    = $file->size();
-            return $hash;
-        };
-        return $readHash;
+    function add(AbstractFile $file) {
+        $this->hashes[$file->hash($this->data)][] = $file;
     }
 
     /**
      * @param string $hash
-     * @return File[]
+     * @return AbstractFile[]
      */
     function files($hash) {
         return $this->hashes[$hash];
@@ -118,32 +115,44 @@ class Hashes {
 
     function sorted() {
         $sizes = [];
-        foreach ($this->hashes as $hash => $files)
-            if (count($files) > 1)
+        foreach ($this->hashes as $hash => $files) {
+            if (count($files) > 1) {
                 $sizes[$hash] = $this->amountDuplicated($hash);
+            }
+        }
         arsort($sizes, SORT_NUMERIC);
         return array_keys($sizes);
     }
 
-    function totalSize($hash) {
-        return $this->sizes[$hash] * count($this->hashes[$hash]);
-    }
-
     function verify($hash) {
-        $size = $this->sizes[$hash];
         $files =& $this->hashes[$hash];
-        foreach ($files as $k => $file) {
-            if (!$file->exists() || $file->size() != $size)
+        foreach ($files as $k => &$file) {
+            if (!$file->exists()) {
                 unset($files[$k]);
+            } else {
+                $file    = $file->recreate();
+                $newHash = $file->hash($this->data);
+                if ($newHash !== $hash) {
+                    unset($files[$k]);
+                    $this->hashes[$newHash][] = $file;
+                }
+            }
         }
         $files = array_values($files);
     }
 
+    /**
+     * @param string $hash
+     * @return int
+     */
     function amountDuplicated($hash) {
-        $dupes = count($this->hashes[$hash]) - 1;
-        $size  = $this->sizes[$hash];
-
-        return $dupes * $size;
+        $count = 0;
+        $size  = 0;
+        foreach ($this->hashes[$hash] as $file) {
+            $count++;
+            $size += $file->size();
+        }
+        return $size - ($size / $count);
     }
 }
 
@@ -152,12 +161,12 @@ function runReport(Hashes $hashes) {
 
     $i = 0;
     while (isset($sorted[$i])) {
-        $num   = count($sorted);
-        $hash  = $sorted[$i];
+        $num  = count($sorted);
+        $hash = $sorted[$i];
         $hashes->verify($hash);
         $files = $hashes->files($hash);
         $count = count($files);
-        $index = ($i+1) . "/$num";
+        $index = ($i + 1) . "/$num";
 
         if ($count <= 1) {
             array_splice($sorted, $i, 1);
@@ -202,6 +211,39 @@ function runReport(Hashes $hashes) {
     print "done\n";
 }
 
+class FileData {
+    /** @var string[] */
+    private $hashes = [];
+
+    /**
+     * @param AbstractFile[] $files
+     */
+    function __construct(array $files) {
+        /** @var File[] $files2 */
+        $files2 = [];
+        foreach ($files as $file)
+            foreach ($file->flatten() as $file2)
+                if ($file2 instanceof File)
+                    $files2[$file2->path()] = $file2;
+
+        $size = 0;
+        foreach ($files2 as $file)
+            $size += $file->size();
+
+        print "need to scan " . formatBytes($size) . "\n";
+
+        $progress = new Progress($size);
+        foreach ($files2 as $k => $file)
+            $this->hashes[$k] = hash($progress->readFile($file));
+        $progress->printProgress();
+        print "\n";
+    }
+
+    function hash(File $file) {
+        return $this->hashes[$file->path()];
+    }
+}
+
 function readOption(array $options) {
     while (true) {
         print "Please select an option:\n";
@@ -227,39 +269,39 @@ s
     );
 
     if ($args['cleanup']) {
-        $paths = $args['<path>'];
-
-        /** @var File[] $files */
+        /** @var AbstractFile[] $files */
         $files = [];
-        $size  = 0;
-        foreach ($paths as $path) {
-            $file = new File($path);
-            $size += $file->size(function ($path) {
-                printReplace("scanning $path");
-            });
-            $files[] = $file;
-        }
-        printReplace();
+        foreach ($args['<path>'] as $path)
+            $files[] = AbstractFile::create($path);
 
-        print "found " . formatBytes($size) . "\n";
-
-        $progress = new Progress($size);
-        $hashes   = new Hashes;
-        $readHash = $hashes->hashReader(function (File $file) use ($progress) {
-            return $progress->readFile($file);
-        });
-
+        $keys = [];
         foreach ($files as $file)
-            $readHash($file);
+            foreach ($file->flatten() as $file2)
+                $keys[$file2->key()][] = $file2;
 
-        printReplace();
+        foreach ($keys as $k => $files2)
+            if (count($files2) == 1)
+                unset($keys[$k]);
+
+        print count($keys) . " possible duplicates\n";
+
+        /** @var AbstractFile[] */
+        $matchedFiles = [];
+        foreach ($keys as $files2)
+            foreach ($files2 as $file2)
+                $matchedFiles[] = $file2;
+
+        $data   = new FileData($matchedFiles);
+        $hashes = new Hashes($data);
+        foreach ($matchedFiles as $file)
+            $hashes->add($file);
+
         runReport($hashes);
     }
 
     if ($args['read']) {
         foreach ($args['<path>'] as $path) {
-            $file = new File($path);
-            foreach ($file->readContents() as $s)
+            foreach ((new File($path))->contents() as $s)
                 print $s;
         }
     }
