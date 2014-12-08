@@ -57,7 +57,7 @@ class Progress {
     }
 
     function percent() {
-        return $this->done / $this->total;
+        return $this->done / ($this->total ?: 1);
     }
 
     function formatPercent() {
