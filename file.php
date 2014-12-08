@@ -78,7 +78,14 @@ abstract class AbstractFile {
         yield $this;
     }
 
-    final function key() { return "{$this->type()} {$this->size()}"; }
+    final function key() {
+        $type = $this->type();
+        $key  = $this->keyImpl();
+        return $key ? "$type $key" : $type;
+    }
+
+    /** @return string */
+    abstract function keyImpl();
 
     function size() { return 0; }
 
@@ -114,6 +121,10 @@ class Link extends AbstractFile {
         $this->destination = readlink($this->path());
     }
 
+    function keyImpl() {
+        return $this->destination;
+    }
+
     function contents(FileData $data = null) {
         yield $this->destination;
     }
@@ -134,6 +145,12 @@ class Directory extends AbstractFile {
         $scan = array_diff($scan, ['.', '..']);
         foreach ($scan as $s)
             $this->files[] = AbstractFile::create($s, $this);
+    }
+
+    function keyImpl() {
+        $size  = $this->size();
+        $count = count($this->files);
+        return "$count $size";
     }
 
     function size() {
@@ -175,12 +192,18 @@ class File extends AbstractFile {
 
     function type() { return self::FILE; }
 
+    function keyImpl() { return $this->size(); }
+
     function hashImpl(FileData $data = null) {
         return $data ? $data->hash($this) : parent::hashImpl($data);
     }
 
     function contents(FileData $data = null) {
         return $this->read();
+    }
+
+    function get($offset = 0, $limit = null) {
+        return file_get_contents($this->path(), null, null, $offset, $limit);
     }
 
     /**
@@ -201,6 +224,13 @@ class Other extends AbstractFile {
         return $this->type;
     }
 
+    function keyImpl() { return ''; }
+
+    /**
+     * @param string $name
+     * @param Directory $parent
+     * @param string $type
+     */
     function __construct($name, Directory $parent = null, $type) {
         parent::__construct($name, $parent);
         $this->type = $type;

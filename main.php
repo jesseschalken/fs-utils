@@ -176,6 +176,7 @@ function runReport(Hashes $hashes) {
         $duplicated = $hashes->amountDuplicated($hash);
         $duplicated = formatBytes($duplicated);
 
+        print "\n";
         print "$index: [$hash] ($count copies, $duplicated duplicated)\n";
 
         $options = [];
@@ -264,15 +265,27 @@ function main() {
 Usage:
   find-duplicate-files cleanup <path>...
   find-duplicate-files read <path>...
+  find-duplicate-files key <path>...
   find-duplicate-files --help|-h
 s
     );
 
     if ($args['cleanup']) {
+        print "reading filesystem tree...\n";
+
         /** @var AbstractFile[] $files */
         $files = [];
-        foreach ($args['<path>'] as $path)
-            $files[] = AbstractFile::create($path);
+        $size  = 0;
+        $count = 0;
+        foreach ($args['<path>'] as $path) {
+            $file    = AbstractFile::create($path);
+            $files[] = $file;
+            $count += iterator_count($file->flatten());
+            $size += $file->size();
+        }
+
+        print "found $count files, " . formatBytes($size) . "\n";
+        print "searching for possible duplicates...\n";
 
         $keys = [];
         foreach ($files as $file)
@@ -284,6 +297,7 @@ s
                 unset($keys[$k]);
 
         print count($keys) . " possible duplicates\n";
+        print "searching for actual duplicates...\n";
 
         /** @var AbstractFile[] */
         $matchedFiles = [];
@@ -301,8 +315,14 @@ s
 
     if ($args['read']) {
         foreach ($args['<path>'] as $path) {
-            foreach ((new File($path))->contents() as $s)
+            foreach (File::create($path)->contents() as $s)
                 print $s;
+        }
+    }
+
+    if ($args['key']) {
+        foreach ($args['<path>'] as $path) {
+            print File::create($path)->key() . "\n";
         }
     }
 }
