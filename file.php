@@ -153,11 +153,12 @@ class Directory extends AbstractFile {
     function keyImpl() {
         $size  = $this->size();
         $count = count($this->files);
-        return "$count $size";
+        $total = iterator_count($this->flatten());
+        return "$count $total $size";
     }
 
     function size() {
-        $size = 1;
+        $size = 0;
         foreach ($this->files as $file)
             $size += $file->size();
         return $size;
