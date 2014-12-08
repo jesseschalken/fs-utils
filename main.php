@@ -164,23 +164,21 @@ function runReport(Hashes $hashes) {
 
     $i = 0;
     while (isset($sorted[$i])) {
-        $num  = count($sorted);
-        $hash = $sorted[$i];
+        $hash       = $sorted[$i];
+        $num        = count($sorted);
+        $count      = count($hashes->files($hash));
+        $duplicated = formatBytes($hashes->amountDuplicated($hash));
+
+        print "\n";
+        print ($i + 1) . "/$num: [$hash] ($count copies, $duplicated duplicated)\n";
+
         $hashes->verify($hash);
         $files = $hashes->files($hash);
-        $count = count($files);
-        $index = ($i + 1) . "/$num";
 
-        if ($count <= 1) {
+        if (count($files) <= 1) {
             array_splice($sorted, $i, 1);
             continue;
         }
-
-        $duplicated = $hashes->amountDuplicated($hash);
-        $duplicated = formatBytes($duplicated);
-
-        print "\n";
-        print "$index: [$hash] ($count copies, $duplicated duplicated)\n";
 
         $options = [];
         foreach ($files as $k => $file)
@@ -230,6 +228,7 @@ class FileData {
                 if ($file2 instanceof File)
                     $files2[$file2->path()] = $file2;
 
+        ksort($files2, SORT_STRING);
         $size = 0;
         foreach ($files2 as $file)
             $size += $file->size();
