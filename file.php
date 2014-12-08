@@ -122,7 +122,7 @@ class Link extends AbstractFile {
     }
 
     function keyImpl() {
-        return $this->destination;
+        return strlen($this->destination);
     }
 
     function contents(FileData $data = null) {
