@@ -127,12 +127,15 @@ class Hashes {
     function verify($hash) {
         $files =& $this->hashes[$hash];
         foreach ($files as $k => &$file) {
+            $path = $file->path();
             if (!$file->exists()) {
+                print "\"$path\" no longer exists\n";
                 unset($files[$k]);
             } else {
                 $file    = $file->recreate();
                 $newHash = $file->hash($this->data);
                 if ($newHash !== $hash) {
+                    print "\"$path\" hash has changed\n";
                     unset($files[$k]);
                     $this->hashes[$newHash][] = $file;
                 }

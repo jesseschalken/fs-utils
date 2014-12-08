@@ -61,7 +61,10 @@ abstract class AbstractFile {
         shell_exec($cmd);
     }
 
-    final function exists() { return file_exists($this->path()); }
+    final function exists() {
+        $path = $this->path();
+        return file_exists($path) || is_string(@readlink($path));
+    }
 
     abstract function type();
 
