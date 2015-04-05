@@ -321,11 +321,8 @@ s
             $size += $torrent->totalSize();
 
         $progress = new Progress($size);
-        foreach ($torrents as $torrent) {
-            $torrent->checkFiles($dataDir);
-            if (!$args['--no-data'])
-                $torrent->checkFileContents($dataDir, $progress);
-        }
+        foreach ($torrents as $torrent)
+            $torrent->checkFileContents($dataDir, $progress);
         $progress->printProgress();
         print "\n";
         print "\n";
