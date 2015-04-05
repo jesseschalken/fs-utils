@@ -28,6 +28,6 @@ $ ./main.php --help
 
 Example:
 ```
-$ ./main.php verify-data --data-dir=~/Downloads torrent1.torrent torrent2.torrent
+$ ./main.php --data-dir=~/Downloads torrent1.torrent torrent2.torrent
 ```
 
