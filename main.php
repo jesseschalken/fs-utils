@@ -25,17 +25,30 @@ function dump($string) {
     return json_encode($string, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 }
 
-function readFiles(array $files) {
-    foreach ($files as $file) {
-        if (!file_exists($file))
-            continue;
-        $f = fopen($file, 'rb');
-        if (!$f)
-            continue;
-        while (!feof($f))
-            yield fread($f, 1024000);
-        fclose($f);
-    }
+function readFile($file) {
+    if (!file_exists($file))
+        return;
+    $f = fopen($file, 'rb');
+    if (!$f)
+        return;
+    while (!feof($f))
+        yield fread($f, 1024000);
+    fclose($f);
+}
+
+function zeros() {
+    while (true)
+        yield str_repeat("\x00", 102400);
+}
+
+/**
+ * @param \Generator[] $generators
+ * @return \Generator
+ */
+function gen_join(array $generators) {
+    foreach ($generators as $gen)
+        foreach ($gen as $x)
+            yield $x;
 }
 
 function chunk(\Traversable $data, $length) {
@@ -218,21 +231,40 @@ class TorrentInfo {
             print CLEAR . "torrent: $this->filename\n  " . join("\n  ", $problems) . "\n";
     }
 
-    function readPieces($dataDir, Progress $progress) {
-        $files = array();
-        foreach ($this->files as $file => $size)
-            $files[] = $dataDir . DIR_SEP . $file;
+    /**
+     * Pads output with zeros for files which are missing or too short, and
+     * prunes files which are too long, so the offset of each file in the
+     * output stream stays correct regardless of what's on disk.
+     *
+     * @param string $dataDir
+     * @return \Generator
+     */
+    function readFiles($dataDir) {
+        foreach ($this->files as $file => $size) {
+            $data = gen_join([readFile($dataDir . DIR_SEP . $file), zeros()]);
+            $read = 0;
+            foreach ($data as $piece) {
+                $piece = substr($piece, 0, $size - $read);
+                yield $piece;
+                $read += strlen($piece);
+                if ($read >= $size)
+                    break;
+            }
+        }
+    }
 
+    /**
+     * @param string   $dataDir
+     * @param Progress $progress
+     * @return string[]
+     */
+    function readPieces($dataDir, Progress $progress) {
         $pieces = array();
-        $done   = 0;
-        foreach (chunk(readFiles($files), $this->pieceSize) as $i => $piece) {
+        foreach (chunk($this->readFiles($dataDir), $this->pieceSize) as $piece) {
             $progress->printProgress($this->filename);
             $progress->add(strlen($piece));
-            $done += strlen($piece);
             $pieces[] = sha1($piece, true);
         }
-        $progress->add($this->totalSize() - $done);
-
         return $pieces;
     }
 
@@ -243,26 +275,18 @@ class TorrentInfo {
     function checkFileContents($dataDir, Progress $progress) {
         $pieces  = $this->readPieces($dataDir, $progress);
         $matches = 0;
-        $string  = array();
-        $zeros   = sha1(str_repeat("\x00", $this->pieceSize), true);
+        $string  = '';
 
         foreach ($this->pieces as $i => $piece) {
-            if (!isset($pieces[$i])) {
-                $string[] = '?';
-            } else if ($pieces[$i] === $piece) {
-                $string[] = '=';
+            if ($pieces[$i] === $piece) {
+                $string .= '=';
                 $matches++;
-            } else if ($pieces[$i] === $zeros) {
-                $string[] = ' ';
             } else {
-                $string[] = '·';
+                $string .= ' ';
             }
         }
  
         if ($matches != count($this->pieces)) {
-            $map = '';
-            foreach (array_chunk($string, 70) as $chunk)
-                $map .= "  [" . join('', $chunk) . "]\n";
             $percent = number_format($matches / count($this->pieces) * 100, 2) . '%';
             $count   = "$matches/" . count($this->pieces);
             $piece   = formatBytes($this->pieceSize);
@@ -272,13 +296,12 @@ torrent: $this->filename
   $percent match ($count pieces, 1 piece = $piece)
 
   [=] match
-  [·] mismatch
-  [ ] mismatch (zeros)
-  [?] missing
-
-$map
+  [ ] mismatch
 
 s;
+            foreach (str_split($string, 70) as $chunk)
+                print "  [$chunk]\n";
+            print "\n";
         }
     }
 }
