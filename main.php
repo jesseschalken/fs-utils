@@ -21,20 +21,20 @@ function fixWindowsPath($path) {
     return str_replace($invalids, '_', $path);
 }
 
-function readFile($file) {
+function readFile($file, $len = 1024000) {
     if (!file_exists($file))
         return;
     $f = fopen($file, 'rb');
     if (!$f)
         return;
     while (!feof($f))
-        yield fread($f, 1024000);
+        yield fread($f, $len);
     fclose($f);
 }
 
-function zeros() {
+function zeros($len = 102400) {
     while (true)
-        yield str_repeat("\x00", 102400);
+        yield str_repeat("\x00", $len);
 }
 
 /**
@@ -236,8 +236,9 @@ class TorrentInfo {
      * @return \Generator
      */
     function readFiles($dataDir) {
+        $chunk = 10 * 1024 * 1024;
         foreach ($this->files as $file => $size) {
-            $data = gen_join([readFile($dataDir . DIR_SEP . $file), zeros()]);
+            $data = gen_join([readFile($dataDir . DIR_SEP . $file, $chunk), zeros($chunk)]);
             $read = 0;
             foreach ($data as $piece) {
                 $piece = substr($piece, 0, $size - $read);
