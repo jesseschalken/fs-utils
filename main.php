@@ -238,21 +238,26 @@ class TorrentInfo {
     function checkFileContents($dataDir, Progress $progress) {
         $pieces  = $this->readPieces($dataDir, $progress);
         $matches = 0;
-        $string  = '';
+        $string  = array();
+        $zeros   = sha1(str_repeat("\x00", $this->pieceSize), true);
 
         foreach ($this->pieces as $i => $piece) {
             if (!isset($pieces[$i])) {
-                $string .= '?';
-            } else if ($pieces[$i] !== $piece) {
-                $string .= ' ';
-            } else {
-                $string .= '=';
+                $string[] = '?';
+            } else if ($pieces[$i] === $piece) {
+                $string[] = '=';
                 $matches++;
+            } else if ($pieces[$i] === $zeros) {
+                $string[] = ' ';
+            } else {
+                $string[] = '·';
             }
         }
  
         if ($matches != count($this->pieces)) {
-            $string  = '[' . join("]\n  [", str_split($string, 70)) . ']';
+            $map = '';
+            foreach (array_chunk($string, 70) as $chunk)
+                $map .= "  [" . join('', $chunk) . "]\n";
             $percent = number_format($matches / count($this->pieces) * 100, 2) . '%';
             $count   = "$matches/" . count($this->pieces);
             $piece   = formatBytes($this->pieceSize);
@@ -262,11 +267,11 @@ torrent: $this->filename
   $percent match ($count pieces, 1 piece = $piece)
 
   [=] match
-  [ ] mismatch
+  [·] mismatch
+  [ ] mismatch (zeros)
   [?] missing
 
-  $string
-
+$map
 
 s;
         }
