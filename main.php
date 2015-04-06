@@ -27,7 +27,11 @@ function dump($string) {
 
 function readFiles(array $files) {
     foreach ($files as $file) {
+        if (!file_exists($file))
+            continue;
         $f = fopen($file, 'rb');
+        if (!$f)
+            continue;
         while (!feof($f))
             yield fread($f, 1024000);
         fclose($f);
