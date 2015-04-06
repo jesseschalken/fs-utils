@@ -325,6 +325,16 @@ s
     foreach ($torrents as $torrent)
         $torrent->checkFiles($dataDir);
 
+    if ($args['--orphaned']) {
+        $files = array();
+        foreach ($torrents as $torrent)
+            foreach ($torrent->fileNames() as $file)
+                $files[] = $dataDir . DIR_SEP . $file;
+
+        $all = recursiveScan($dataDir);
+        print "orphaned files:\n  " . join("\n  ", array_diff($all, $files) ? : array('none')) . "\n";
+    }
+
     if (!$args['--no-data']) {
         $size  = 0.0;
         foreach ($torrents as $torrent)
@@ -335,18 +345,9 @@ s
             $torrent->checkFileContents($dataDir, $progress);
         $progress->printProgress();
         print "\n";
-        print "\n";
     }
 
-    if ($args['--orphaned']) {
-        $files = array();
-        foreach ($torrents as $torrent)
-            foreach ($torrent->fileNames() as $file)
-                $files[] = $dataDir . DIR_SEP . $file;
-
-        $all = recursiveScan($dataDir);
-        print "orphaned files:\n  " . join("\n  ", array_diff($all, $files) ? : array('none')) . "\n";
-    }
+    print "done\n";
 }
 
 main();
