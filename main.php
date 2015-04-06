@@ -206,7 +206,7 @@ class TorrentInfo {
             $path = $dataDir . DIR_SEP . $file;
 
             if (!file_exists($path))
-                $problems[] = "missing: $path";
+                $problems[] = "missing (" . formatBytes($size) . "): $path";
             else if (!is_readable($path))
                 $problems[] = "not readable: $path";
             else if (!is_file($path))
