@@ -21,10 +21,6 @@ function fixWindowsPath($path) {
     return str_replace($invalids, '_', $path);
 }
 
-function dump($string) {
-    return json_encode($string, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-}
-
 function readFile($file) {
     if (!file_exists($file))
         return;
