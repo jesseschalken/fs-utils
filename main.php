@@ -7,6 +7,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 error_reporting(-1);
 ini_set('display_errors', 'On');
+ini_set('memory_limit', '-1');
 mb_internal_encoding('UTF-8');
 
 const DIR_SEP = DIRECTORY_SEPARATOR;
