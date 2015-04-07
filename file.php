@@ -210,6 +210,10 @@ class File extends AbstractFile {
         return file_get_contents($this->path(), null, null, $offset, $limit);
     }
 
+    function extension() {
+        return pathinfo($this->path(), PATHINFO_EXTENSION);
+    }
+
     /**
      * @return \Generator
      */

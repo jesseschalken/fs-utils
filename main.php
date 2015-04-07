@@ -5,6 +5,104 @@ namespace FindDuplicateFiles;
 
 require_once __DIR__ . '/vendor/autoload.php';
 
+class Process {
+    /** @var resource */
+    private $proc;
+    /** @var resource[] */
+    private $pipes;
+    /** @var string */
+    private $in = '';
+    /** @var string */
+    private $out = '';
+    /** @var string */
+    private $err = '';
+
+    function __construct($cmd) {
+        $this->proc = proc_open($cmd, [
+            0 => ['pipe', 'read'], // stdin
+            1 => ['pipe', 'write'], // stdout
+            2 => ['pipe', 'write'], // stderr
+        ], $this->pipes);
+
+        foreach ($this->pipes as $pipe)
+            stream_set_blocking($pipe, 0);
+    }
+
+    function __destruct() {
+        foreach ($this->pipes as $pipe)
+            fclose($pipe);
+        proc_close($this->proc);
+    }
+
+    function writeInput($in) {
+        $this->in .= $in;
+    }
+
+    function readOutput() {
+        $out = $this->out;
+        $this->out = '';
+        return $out;
+    }
+
+    function readError() {
+        $err = $this->err;
+        $this->err = '';
+        return $err;
+    }
+
+    function runInput() {
+        while (strlen($this->in) > 0)
+            $this->run();
+    }
+
+    function finishInput() {
+        $this->runInput();
+        fclose($this->pipes[0]);
+        unset($this->pipes[0]);
+    }
+
+    function finish() {
+        $this->finishInput();
+        while (!feof($this->pipes[1]) || !feof($this->pipes[2]))
+            $this->run();
+    }
+
+    function run() {
+        $w = isset($this->pipes[0]) ? [0 => $this->pipes[0]] : [];
+        $r = [1 => $this->pipes[1], 2 => $this->pipes[2]];
+        $e = [];
+        stream_select($r, $w, $e, null);
+        foreach (array_replace($r, $w) as $k => $pipe) {
+            if ($k == 0)
+                $this->in = substr($this->in, fwrite($pipe, $this->in));
+            else if ($k == 1)
+                $this->out .= stream_get_contents($pipe);
+            else if ($k == 2)
+                $this->err .= stream_get_contents($pipe);
+        }
+    }
+}
+
+/**
+ * @param \Generator $input
+ * @param string     $cmd
+ * @return \Generator
+ */
+function pipe_cmd(\Generator $input, $cmd) {
+    $proc = new Process($cmd);
+
+    foreach ($input as $in) {
+        $proc->writeInput($in);
+        $proc->runInput();
+        yield $proc->readOutput();
+        fwrite(STDERR, $proc->readError());
+    }
+
+    $proc->finish();
+    yield $proc->readOutput();
+    fwrite(STDERR, $proc->readError());
+}
+
 function formatBytes($bytes) {
     $f = ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
     $i = (int)floor(log(max(abs($bytes), 1), 1000));
@@ -219,8 +317,9 @@ class FileData {
 
     /**
      * @param AbstractFile[] $files
+     * @param Filters        $filters
      */
-    function __construct(array $files) {
+    function __construct(array $files, Filters $filters) {
         /** @var File[] $files2 */
         $files2 = [];
         foreach ($files as $file)
@@ -237,7 +336,7 @@ class FileData {
 
         $progress = new Progress($size);
         foreach ($files2 as $k => $file)
-            $this->hashes[$k] = hash($progress->readFile($file));
+            $this->hashes[$k] = hash($filters->filter($progress->readFile($file), $file->extension()));
         $progress->printProgress();
         print "\n";
     }
@@ -261,11 +360,31 @@ function readOption(array $options) {
     throw new \Exception;
 }
 
+class Filters {
+    /** @var string[] */
+    private $filters = [];
+
+    function add($ext, $cmd) {
+        $this->filters[$ext][] = $cmd;
+    }
+
+    function filter(\Generator $data, $ext) {
+        if (isset($this->filters[$ext]))
+            foreach ($this->filters[$ext] as $cmd)
+                $data = pipe_cmd($data, $cmd);
+        return $data;
+    }
+
+    function isEmpty() {
+        return !$this->filters;
+    }
+}
+
 function main() {
     ini_set('memory_limit', '-1');
     $args = \Docopt::handle(<<<s
 Usage:
-  find-duplicate-files cleanup <path>...
+  find-duplicate-files cleanup [(--filter=<ext:cmd>)...] <path>...
   find-duplicate-files read <path>...
   find-duplicate-files key <path>...
   find-duplicate-files --help|-h
@@ -273,43 +392,51 @@ s
     );
 
     if ($args['cleanup']) {
+        $filters = new Filters;
+        foreach ($args['--filter'] as $filter) {
+            list($ext, $cmd) = explode(':', $filter, 2);
+            $filters->add($ext, $cmd);
+        }
+
         print "reading filesystem tree...\n";
 
         /** @var AbstractFile[] $files */
         $files = [];
-        $size  = 0;
-        $count = 0;
-        foreach ($args['<path>'] as $path) {
-            $file    = AbstractFile::create($path);
-            $files[] = $file;
-            $count += iterator_count($file->flatten());
-            $size += $file->size();
+        foreach ($args['<path>'] as $path)
+            foreach (AbstractFile::create($path)->flatten() as $file)
+                $files[] = $file;
+
+        $size = 0;
+        foreach ($files as $file)
+            if ($file instanceof File)
+                $size += $file->size();
+
+        print "found " . count($files) . " files, " . formatBytes($size) . "\n";
+
+        if ($filters->isEmpty()) {
+            print "searching for possible duplicates...\n";
+
+            $keys = [];
+            foreach ($files as $file)
+                $keys[$file->key()][] = $file;
+
+            foreach ($keys as $k => $files2)
+                if (count($files2) == 1)
+                    unset($keys[$k]);
+
+            /** @var AbstractFile[] */
+            $files = [];
+            foreach ($keys as $files2)
+                foreach ($files2 as $file2)
+                    $files[] = $file2;
+
+            print count($files) . " possible duplicates\n";
+            print "searching for actual duplicates...\n";
         }
 
-        print "found $count files, " . formatBytes($size) . "\n";
-        print "searching for possible duplicates...\n";
-
-        $keys = [];
-        foreach ($files as $file)
-            foreach ($file->flatten() as $file2)
-                $keys[$file2->key()][] = $file2;
-
-        foreach ($keys as $k => $files2)
-            if (count($files2) == 1)
-                unset($keys[$k]);
-
-        print count($keys) . " possible duplicates\n";
-        print "searching for actual duplicates...\n";
-
-        /** @var AbstractFile[] */
-        $matchedFiles = [];
-        foreach ($keys as $files2)
-            foreach ($files2 as $file2)
-                $matchedFiles[] = $file2;
-
-        $data   = new FileData($matchedFiles);
+        $data   = new FileData($files, $filters);
         $hashes = new Hashes($data);
-        foreach ($matchedFiles as $file)
+        foreach ($files as $file)
             $hashes->add($file);
 
         runReport($hashes);
@@ -330,3 +457,4 @@ s
 }
 
 main();
+
