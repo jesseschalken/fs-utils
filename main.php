@@ -63,22 +63,27 @@ class Process {
 
     function finish() {
         $this->finishInput();
-        while (!feof($this->pipes[1]) || !feof($this->pipes[2]))
+        while ($this->pipes)
             $this->run();
     }
 
     function run() {
-        $w = isset($this->pipes[0]) ? [0 => $this->pipes[0]] : [];
-        $r = [1 => $this->pipes[1], 2 => $this->pipes[2]];
+        $w = $r = $this->pipes;
         $e = [];
+        unset($w[1], $w[2], $r[0]);
         stream_select($r, $w, $e, null);
         foreach (array_replace($r, $w) as $k => $pipe) {
-            if ($k == 0)
+            if ($k == 0) {
                 $this->in = substr($this->in, fwrite($pipe, $this->in));
-            else if ($k == 1)
+            } else if ($k == 1) {
                 $this->out .= stream_get_contents($pipe);
-            else if ($k == 2)
+                if (feof($pipe))
+                    unset($this->pipes[$k]);
+            } else if ($k == 2) {
                 $this->err .= stream_get_contents($pipe);
+                if (feof($pipe))
+                    unset($this->pipes[$k]);
+            }
         }
     }
 }
