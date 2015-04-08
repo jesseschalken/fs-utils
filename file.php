@@ -57,7 +57,7 @@ abstract class AbstractFile {
 
     final function delete() {
         $cmd = "rm -rf " . escapeshellarg($this->path());
-        printReplace("$cmd\n");
+        print CLEAR . "$cmd\n";
         shell_exec($cmd);
     }
 

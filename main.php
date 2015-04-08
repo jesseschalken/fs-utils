@@ -114,14 +114,7 @@ function formatBytes($bytes) {
     return number_format($bytes / pow(1000, $i), 2) . " {$f[$i]}B";
 }
 
-function printReplace($line = '') {
-    static $cols;
-    if ($cols === null)
-        $cols = (int)`tput cols`;
-    if ($cols && strpos($line, "\n") === false)
-        $line = substr($line, 0, $cols);
-    print "\r\x1B[2K$line";
-}
+const CLEAR = "\r\x1B[2K";
 
 class Progress {
     private $total;
@@ -178,7 +171,7 @@ class Progress {
         $line = $this->formatProgress();
         if ($note)
             $line .= ": $note";
-        printReplace($line);
+        print CLEAR . $line;
     }
 
     /**
