@@ -77,12 +77,16 @@ class Process {
                 $this->in = substr($this->in, fwrite($pipe, $this->in));
             } else if ($k == 1) {
                 $this->out .= stream_get_contents($pipe);
-                if (feof($pipe))
+                if (feof($pipe)) {
+                    fclose($pipe);
                     unset($this->pipes[$k]);
+                }
             } else if ($k == 2) {
                 $this->err .= stream_get_contents($pipe);
-                if (feof($pipe))
+                if (feof($pipe)) {
+                    fclose($pipe);
                     unset($this->pipes[$k]);
+                }
             }
         }
     }
