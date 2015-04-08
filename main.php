@@ -361,7 +361,7 @@ function readOption(array $options) {
 }
 
 class Filters {
-    /** @var string[] */
+    /** @var string[][] */
     private $filters = [];
 
     function add($ext, $cmd) {
