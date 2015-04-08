@@ -116,7 +116,7 @@ function formatBytes($bytes) {
     return number_format($bytes / pow(1000, $i), 2) . " {$f[$i]}B";
 }
 
-const CLEAR = "\r\x1B[2K";
+const CLEAR = "\r\x1B[2K\x1B[?7l";
 
 class Progress {
     private $total;
