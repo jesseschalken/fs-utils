@@ -100,12 +100,10 @@ function pipe_cmd(\Generator $input, $cmd) {
         $proc->writeInput($in);
         $proc->runInput();
         yield $proc->readOutput();
-        fwrite(STDERR, $proc->readError());
     }
 
     $proc->finish();
     yield $proc->readOutput();
-    fwrite(STDERR, $proc->readError());
 }
 
 function formatBytes($bytes) {
