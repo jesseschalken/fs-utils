@@ -99,6 +99,7 @@ s
 
             $this->fileHashes[$k] = hash_stream($data);
         }
+        print CLEAR . $progress->format();
         print "\n";
     }
 

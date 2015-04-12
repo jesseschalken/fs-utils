@@ -45,15 +45,12 @@ class Progress {
      * @return \Generator
      */
     function pipe(\Traversable $gen, $name) {
-        $clear = "\r\x1B[2K\x1B[?7l";
-
-        print $clear . $this->format() . ": $name";
+        print CLEAR . $this->format() . ": $name";
         foreach ($gen as $data) {
             yield $data;
             $this->add(strlen($data));
-            print $clear . $this->format() . ": $name";
+            print CLEAR . $this->format() . ": $name";
         }
-        print $clear . $this->format();
     }
 }
 

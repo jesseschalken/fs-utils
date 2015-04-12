@@ -3,6 +3,7 @@
 namespace FindDuplicateFiles;
 
 const DIR_SEP = DIRECTORY_SEPARATOR;
+const CLEAR   = "\r\x1B[2K\x1B[?7l";
 
 /**
  * @param int $bytes
