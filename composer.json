@@ -3,6 +3,7 @@
         "docopt/docopt": "1.0.0-rc1"
     },
     "autoload": {
-        "classmap": [""]
+        "classmap": ["src", "bin"],
+        "files": ["src/functions.php"]
     }
 }
