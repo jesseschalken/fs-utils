@@ -23,7 +23,7 @@ s
         print "scanning directory tree...\n";
 
         foreach ($args['<path>'] as $path)
-            foreach ((new Tree($path))->flatten() as $tree)
+            foreach (Tree::create($path)->flatten() as $tree)
                 $self->files[] = $tree;
 
         print "found " . number_format(count($self->files)) . " files\n";
@@ -75,12 +75,11 @@ s
     }
 
     private function readFileData() {
-        /** @var Tree[] $files */
+        /** @var File[] $files */
         $files = [];
         foreach ($this->files as $file)
-            /** @var Tree $file_ */
             foreach ($file->flatten() as $file_)
-                if ($file_->isFile())
+                if ($file_ instanceof File)
                     $files[$file_->path()] = $file_;
 
         ksort($files, SORT_STRING);
@@ -93,7 +92,7 @@ s
 
         $progress = new Progress($size);
         foreach ($files as $k => $file) {
-            $data = $file->read(10000);
+            $data = $file->read();
             $data = $progress->pipe($data, $file->path());
             $data = $this->filter($data, $file->extension());
 
