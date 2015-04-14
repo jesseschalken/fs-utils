@@ -102,6 +102,8 @@ abstract class Tree {
     final function path() {
         return $this->parent ? $this->parent->join($this->name) : $this->name;
     }
+
+    function count() { return 1; }
 }
 
 class Fifo extends Tree {
@@ -114,17 +116,26 @@ class Char extends Tree {
 
 class Dir extends Tree {
     /** @var Tree[] */
-    private $children = [];
+    private $children   = [];
+    private $totalSize  = 0;
+    private $totalCount = 1;
 
     function __construct($name, Dir $parent = null) {
         parent::__construct($name, $parent);
-        foreach (array_diff(scandir($this->path()), ['.', '..']) as $s)
-            $this->children[] = Tree::create($s, $this);
+        foreach (array_diff(scandir($this->path()), ['.', '..']) as $s) {
+            $child = Tree::create($s, $this);
+
+            $this->totalSize += $child->size();
+            $this->totalCount += $child->count();
+            $this->children[] = $child;
+        }
     }
 
     protected function key_() {
-        return $this->size() . ' ' . count($this->children) . ' ' . iterator_count($this->flatten());
+        return $this->size() . ' ' . count($this->children) . ' ' . $this->count();
     }
+
+    function count() { return $this->totalCount; }
 
     function flatten() {
         yield $this;
@@ -135,12 +146,7 @@ class Dir extends Tree {
 
     function type() { return 'dir'; }
 
-    function size() {
-        $size = 0;
-        foreach ($this->children as $child)
-            $size += $child->size();
-        return $size;
-    }
+    function size() { return $this->totalSize; }
 
     function delete() {
         foreach ($this->children as $child)
