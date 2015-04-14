@@ -22,11 +22,15 @@ s
 
         print "scanning directory tree...\n";
 
-        foreach ($args['<path>'] as $path)
-            foreach (Tree::create($path)->flatten() as $tree)
+        $size = 0;
+        foreach ($args['<path>'] as $path) {
+            $tree1 = Tree::create($path);
+            $size += $tree1->size();
+            foreach ($tree1->flatten() as $tree)
                 $self->files[] = $tree;
+        }
 
-        print "found " . number_format(count($self->files)) . " files\n";
+        print "found " . number_format(count($self->files)) . " files, " . format_bytes($size) . "\n";
 
         $self->run();
     }
