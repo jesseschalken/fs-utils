@@ -205,7 +205,10 @@ class File extends Tree {
     }
 
     protected function hash_(array $fileHashes) {
-        return $fileHashes[$this->path()];
+        if (isset($fileHashes[$this->path()]))
+            return $fileHashes[$this->path()];
+        else
+            return parent::hash_($fileHashes);
     }
 
     protected function key_() { return $this->size; }
