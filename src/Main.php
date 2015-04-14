@@ -135,11 +135,12 @@ s
                 print "\"$path\" no longer exists\n";
                 unset($files[$k]);
             } else {
-                $hash2 = $file->rebuild()->hash($this->fileHashes);
+                $file  = $file->rebuild();
+                $hash2 = $file->hash($this->fileHashes);
                 if ($hash2 !== $hash) {
                     print "\"$path\" hash has changed\n";
                     unset($files[$k]);
-                    $this->duplicates[$hash2][] = $path;
+                    $this->duplicates[$hash2][] = $file;
                 }
             }
         }
