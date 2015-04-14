@@ -65,7 +65,12 @@ abstract class Tree {
         return file_exists($this->path()) || is_string(@readlink($this->path()));
     }
 
-    function delete() {
+    final function delete() {
+        print "deleted \"{$this->path()}\"\n";
+        $this->delete_();
+    }
+
+    protected function delete_() {
         unlink($this->path());
     }
 
@@ -148,9 +153,9 @@ class Dir extends Tree {
 
     function size() { return $this->totalSize; }
 
-    function delete() {
+    protected function delete_() {
         foreach ($this->children as $child)
-            $child->delete();
+            $child->delete_();
         rmdir($this->path());
     }
 
