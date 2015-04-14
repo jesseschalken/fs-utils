@@ -13,7 +13,7 @@ Usage:
   find-duplicate-files [(--filter=<ext:cmd>)...] <path>...
   find-duplicate-files --help|-h
 s
-            , ['argv' => $argv]);
+            , ['argv' => array_slice($argv, 1)]);
 
         foreach ($args['--filter'] as $filter) {
             list($ext, $cmd) = explode(':', $filter, 2);
