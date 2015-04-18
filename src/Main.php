@@ -17,7 +17,8 @@ s
 
         foreach ($args['--filter'] as $filter) {
             list($ext, $cmd) = explode(':', $filter, 2);
-            $self->filters[$ext][] = $cmd;
+            foreach (explode(',', $ext) as $e)
+                $self->filters[trim($e)][] = $cmd;
         }
 
         print "scanning directory tree...\n";
