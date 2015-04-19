@@ -1,24 +1,26 @@
 <?php
 
-namespace FindDuplicateFiles;
+namespace FSUtils;
 
 class Process {
     /**
-     * @param \Generator $input
-     * @param string     $cmd
-     * @return \Generator
+     * @param Stream $input
+     * @param string cmd
+     * @return Stream
      */
-    static function pipe(\Generator $input, $cmd) {
-        $proc = new self($cmd);
+    static function pipe(Stream $input, $cmd) {
+        return Stream::wrap(function () use ($input, $cmd) {
+            $proc = new self($cmd);
 
-        foreach ($input as $in) {
-            $proc->writeInput($in);
-            $proc->runInput();
+            foreach ($input as $in) {
+                $proc->writeInput($in);
+                $proc->runInput();
+                yield $proc->readOutput();
+            }
+
+            $proc->finish();
             yield $proc->readOutput();
-        }
-
-        $proc->finish();
-        yield $proc->readOutput();
+        });
     }
 
     /** @var resource */

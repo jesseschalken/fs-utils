@@ -1,6 +1,6 @@
 <?php
 
-namespace FindDuplicateFiles;
+namespace FSUtils;
 
 class Progress {
     private $total;
@@ -40,17 +40,23 @@ class Progress {
     }
 
     /**
-     * @param \Traversable $gen
+     * @param Stream $stream
      * @param string $name
-     * @return \Generator
+     * @return Stream
      */
-    function pipe(\Traversable $gen, $name) {
-        print CLEAR . $this->format() . ": $name";
-        foreach ($gen as $data) {
-            yield $data;
-            $this->add(strlen($data));
+    function pipe(Stream $stream, $name) {
+        return Stream::wrap(function () use ($stream, $name) {
             print CLEAR . $this->format() . ": $name";
-        }
+            foreach ($stream() as $data) {
+                yield $data;
+                $this->add(strlen($data));
+                print CLEAR . $this->format() . ": $name";
+            }
+        });
+    }
+
+    function finish() {
+        print CLEAR . $this->format() . "\n";
     }
 }
 

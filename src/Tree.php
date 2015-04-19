@@ -1,6 +1,8 @@
 <?php
 
-namespace FindDuplicateFiles;
+namespace FSUtils\Tree;
+
+use FSUtils\Stream;
 
 abstract class Tree {
     /**
@@ -57,9 +59,9 @@ abstract class Tree {
 
     /**
      * @param string[] $fileHashes
-     * @return \Generator
+     * @return Stream
      */
-    function content(array $fileHashes) { yield ''; }
+    function content(array $fileHashes) { return Stream::empty_(); }
 
     final function exists() {
         return file_exists($this->path()) || is_string(@readlink($this->path()));
@@ -95,7 +97,7 @@ abstract class Tree {
      * @return string
      */
     protected function hash_(array $fileHashes) {
-        return hash_stream($this->content($fileHashes));
+        return $this->content($fileHashes)->hash('sha1');
     }
 
     final function key() {
@@ -164,16 +166,18 @@ class Dir extends Tree {
      * @return string
      */
     function join($path) {
-        return $this->path() . DIR_SEP . $path;
+        return $this->path() . \FSUtils\DIR_SEP . $path;
     }
 
     /**
      * @param string[] $fileHashes
-     * @return \Generator
+     * @return Stream
      */
     function content(array $fileHashes) {
-        foreach ($this->children as $file)
-            yield str_pad($file->hash($fileHashes), 48) . " {$file->name()}\n";
+        return Stream::wrap(function () use ($fileHashes) {
+            foreach ($this->children as $file)
+                yield str_pad($file->hash($fileHashes), 48) . " {$file->name()}\n";
+        });
     }
 }
 
@@ -193,7 +197,7 @@ class Link extends Tree {
 
     function type() { return 'link'; }
 
-    function content(array $fileHashes) { yield $this->dest; }
+    function content(array $fileHashes) { return Stream::fromString($this->dest); }
 }
 
 class File extends Tree {
@@ -218,10 +222,7 @@ class File extends Tree {
     function size() { return $this->size; }
 
     function read() {
-        $f = fopen($this->path(), 'rb');
-        while (!feof($f))
-            yield fread($f, 1024 * 1024);
-        fclose($f);
+        return Stream::read($this->path());
     }
 
     function content(array $fileHashes) {

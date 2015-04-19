@@ -1,8 +1,11 @@
 <?php
 
-namespace FindDuplicateFiles;
+namespace FSUtils;
 
-final class App {
+use FSUtils\Tree\Tree;
+use FSUtils\Tree\File;
+
+final class FindDuplicates {
     /**
      * @param array $argv
      */
@@ -68,11 +71,11 @@ s
     }
 
     /**
-     * @param \Generator $data
+     * @param Stream $data
      * @param string $ext
-     * @return \Generator
+     * @return Stream
      */
-    private function filter(\Generator $data, $ext) {
+    private function filter(Stream $data, $ext) {
         if (isset($this->filters[$ext]))
             foreach ($this->filters[$ext] as $cmd)
                 $data = Process::pipe($data, $cmd);
@@ -82,10 +85,12 @@ s
     private function readFileData() {
         /** @var File[] $files */
         $files = [];
-        foreach ($this->files as $file)
-            foreach ($file->flatten() as $file_)
+        foreach ($this->files as $file) {
+            foreach ($file->flatten() as $file_) {
                 if ($file_ instanceof File)
                     $files[$file_->path()] = $file_;
+            }
+        }
 
         ksort($files, SORT_STRING);
 
@@ -103,8 +108,7 @@ s
 
             $this->fileHashes[$k] = hash_stream($data);
         }
-        print CLEAR . $progress->format();
-        print "\n";
+        $progress->finish();
     }
 
     private function run() {

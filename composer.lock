@@ -4,7 +4,7 @@
         "Read more about it at http://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "hash": "11dde12fcc7d3de1086a79eeab532953",
+    "hash": "ad06306c03dd4e38d0e134998e448eec",
     "packages": [
         {
             "name": "docopt/docopt",
@@ -51,6 +51,42 @@
                 "docs"
             ],
             "time": "2014-09-23 06:54:58"
+        },
+        {
+            "name": "pure-bencode/pure-bencode",
+            "version": "1.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/jesseschalken/pure-bencode.git",
+                "reference": "f423aabaa78d94f366f71e341ee57fc757c734e4"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/jesseschalken/pure-bencode/zipball/f423aabaa78d94f366f71e341ee57fc757c734e4",
+                "reference": "f423aabaa78d94f366f71e341ee57fc757c734e4",
+                "shasum": ""
+            },
+            "require-dev": {
+                "phpunit/phpunit": "*"
+            },
+            "type": "library",
+            "autoload": {
+                "classmap": [
+                    ""
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jesse Schalken",
+                    "email": "me@jesseschalken.com"
+                }
+            ],
+            "description": "A simple and complete bencode encoder/decoder",
+            "time": "2014-03-16 01:40:23"
         }
     ],
     "packages-dev": [],
