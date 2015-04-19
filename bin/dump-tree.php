@@ -2,6 +2,13 @@
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+function mime_type($path) {
+    static $finfo;
+    if ($finfo === null)
+        $finfo = finfo_open();
+    return finfo_file($finfo, $path, FILEINFO_MIME_TYPE);
+}
+
 function dump($parent, $name, $p1 = "", $p2 = "") {
     $path = $parent === null ? $name : $parent . DIRECTORY_SEPARATOR . $name;
     $type = filetype($path);
@@ -10,11 +17,16 @@ function dump($parent, $name, $p1 = "", $p2 = "") {
     $children = array_values($children);
 
     if ($type === 'link') {
-        $type = "$type: " . readlink($path);
+        $line = "$name -> " . readlink($path);
     } else if ($type === 'dir') {
-        $type = "$type " . count($children);
+        $size = count($children);
+        $line = "[$size] $name";
     } else if ($type === 'file') {
-        $type = "$type " . \FSUtils\format_bytes(filesize($path));
+        $size = str_pad(\FSUtils\format_bytes(filesize($path)), 9);
+        $type = str_pad(mime_type($path), 25);
+        $line = "$type $size $name";
+    } else {
+        $line = "[$type] $name";
     }
 
     if ($children && $parent !== null)
@@ -25,7 +37,7 @@ function dump($parent, $name, $p1 = "", $p2 = "") {
         $s = '╴';
     else
         $s = '·';
-    echo "$p1$s [$type] $name\n";
+    echo "$p1$s $line\n";
 
     $last = count($children) - 1;
     foreach ($children as $k => $child) {
