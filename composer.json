@@ -1,0 +1,9 @@
+{
+    "require": {
+        "docopt/docopt": "1.0.0-rc1"
+    },
+    "autoload": {
+        "classmap": ["src", "bin"],
+        "files": ["src/functions.php"]
+    }
+}
