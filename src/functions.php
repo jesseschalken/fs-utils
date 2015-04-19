@@ -11,8 +11,10 @@ const CLEAR   = "\r\x1B[2K\x1B[?7l";
  */
 function format_bytes($bytes) {
     $i = (int)log(max(abs($bytes), 1), 1000);
+    if ($i == 0)
+        return "$bytes B";
     $f = 'KMGTPEZY';
-    $u = $i ? $f[$i - 1] : '';
+    $u = $f[$i - 1];
     return number_format($bytes / pow(1000, $i), 2) . " {$u}B";
 }
 
