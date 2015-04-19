@@ -102,6 +102,13 @@ final class Stream implements \IteratorAggregate {
         });
     }
 
+    function output() {
+        foreach ($this() as $s) {
+            echo $s;
+            flush();
+        }
+    }
+
     function prepend(self $self) {
         return new self(array_merge($self->gens, $this->gens));
     }
